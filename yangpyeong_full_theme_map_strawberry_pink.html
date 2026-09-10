@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>양평군 종합 테마 지도</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; }
+        #container { display: flex; height: 100vh; width: 100vw; }
+        
+        /* 사이드바 스타일 */
+        #sidebar { 
+            width: 400px; background-color: #f8f9fa; padding: 20px; 
+            box-sizing: border-box; overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.1); 
+            z-index: 1000; display: flex; flex-direction: column;
+        }
+        #sidebar h2 { font-size: 18px; margin-top: 0; padding-bottom: 10px; border-bottom: 2px solid #333; color: #222; }
+        
+        /* 범례(Legend) 스타일 */
+        .legend { display: flex; gap: 8px; margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 5px; border: 1px solid #ddd; flex-wrap: wrap; }
+        .legend-item { display: flex; align-items: center; font-size: 12px; font-weight: bold; }
+        .legend-color { width: 14px; height: 14px; border-radius: 50%; margin-right: 5px; }
+        .bg-navy { background-color: #000080; border-radius: 2px; } 
+        .bg-orange { background-color: #F69730; } 
+        .bg-red { background-color: #CB2B3E; }
+        .bg-strawberry { background-color: #FF69B4; } /* 핑크색으로 복구 */
+        .bg-white { background-color: #FFFFFF; border: 1px solid #999; }
+        .bg-purple { background-color: #8A2BE2; }
+        
+        /* 리스트 스타일 */
+        .list-section-title { font-size: 14px; margin: 15px 0 5px 0; color: #444; font-weight: bold; padding-bottom: 3px; border-bottom: 1px solid #ccc; }
+        .place-list { list-style: none; padding: 0; margin: 0; }
+        .place-list li { 
+            padding: 10px 8px; border-bottom: 1px solid #eee; cursor: pointer; transition: background-color 0.2s; 
+        }
+        .place-list li:hover { background-color: #e9ecef; }
+        .place-list li strong { display: block; font-size: 13px; margin-bottom: 4px; color: #333; }
+        .place-list li span { font-size: 11px; color: #666; word-break: keep-all; }
+        
+        /* 카테고리 태그 */
+        .tag { font-size: 10px; padding: 2px 6px; border-radius: 3px; color: white; display: inline-block; margin-bottom: 4px; }
+        .tag.office { background-color: #000080; } 
+        .tag.brewery { background-color: #F69730; } 
+        .tag.hotel { background-color: #CB2B3E; }
+        .tag.strawberry { background-color: #FF69B4; } /* 핑크색으로 복구 */
+        .tag.sledding { background-color: #fff; color: #333; border: 1px solid #999; }
+        .tag.sauna { background-color: #8A2BE2; }
+        
+        #map { flex-grow: 1; height: 100%; }
+        
+        /* 팝업 스타일 */
+        .popup-content { text-align: center; min-width: 180px; }
+        .popup-content h3 { margin: 0 0 5px 0; font-size: 15px; color: #222; }
+        .popup-content p { margin: 0 0 12px 0; font-size: 12px; color: #666; word-break: keep-all; }
+        .popup-content a { 
+            display: inline-block; padding: 8px 14px; background-color: #03C75A; 
+            color: white; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold;
+        }
+        .popup-content a:hover { background-color: #02a34a; }
+        
+        .custom-svg-icon { background: none; border: none; }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <div id="sidebar">
+        <h2>양평군 테마지도</h2>
+        
+        <!-- 범례 컬러바 -->
+        <div class="legend">
+            <div class="legend-item"><div class="legend-color bg-navy"></div>군청</div>
+            <div class="legend-item"><div class="legend-color bg-orange"></div>양조장</div>
+            <div class="legend-item"><div class="legend-color bg-red"></div>호텔</div>
+            <div class="legend-item"><div class="legend-color bg-strawberry"></div>딸기농장</div>
+            <div class="legend-item"><div class="legend-color bg-white"></div>썰매체험</div>
+            <div class="legend-item"><div class="legend-color bg-purple"></div>사우나/찜질방</div>
+        </div>
+
+        <div class="list-section-title">관공서</div>
+        <ul id="office-list" class="place-list"></ul>
+
+        <div class="list-section-title">썰매체험</div>
+        <ul id="sledding-list" class="place-list"></ul>
+
+        <div class="list-section-title">사우나/찜질방</div>
+        <ul id="sauna-list" class="place-list"></ul>
+
+        <div class="list-section-title">주류제조면허 양조장</div>
+        <ul id="brewery-list" class="place-list"></ul>
+        
+        <div class="list-section-title">4성급 추천 숙소</div>
+        <ul id="hotel-list" class="place-list"></ul>
+        
+        <div class="list-section-title">딸기체험농장</div>
+        <ul id="strawberry-list" class="place-list"></ul>
+    </div>
+    
+    <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    var map = L.map('map').setView([37.4917, 127.4876], 11);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // 기본 핀포인트 SVG 마커
+    function createSvgIcon(fillColor, strokeColor) {
+        return new L.DivIcon({
+            className: 'custom-svg-icon',
+            html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" style="width:100%; height:100%; filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.3));"><path fill="${fillColor}" stroke="${strokeColor}" stroke-width="15" d="M172.268 501.67C26.97 291.031 0 269.413 0 192 0 85.961 85.961 0 192 0s192 85.961 192 192c0 77.413-26.97 99.031-172.268 309.67-9.535 13.774-29.93 13.773-39.464 0zM192 272c44.183 0 80-35.817 80-80s-35.817-80-80-80-80 35.817-80 80 35.817 80 80 80z"/></svg>`,
+            iconSize: [30, 42],
+            iconAnchor: [15, 42],
+            popupAnchor: [0, -40]
+        });
+    }
+
+    // 빌딩 모양 SVG 마커 (네이비색)
+    var buildingIcon = new L.DivIcon({
+        className: 'custom-svg-icon',
+        html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" style="width:100%; height:100%; filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.3));"><path fill="#000080" stroke="#fff" stroke-width="10" d="M336 0H48C21.5 0 0 21.5 0 48v464h384V48c0-26.5-21.5-48-48-48zM128 448H64v-64h64v64zm0-128H64v-64h64v64zm0-128H64v-64h64v64zm128 256h-64v-64h64v64zm0-128h-64v-64h64v64zm0-128h-64v-64h64v64zm128 256h-64v-64h64v64zm0-128h-64v-64h64v64zm0-128h-64v-64h64v64z"/></svg>`,
+        iconSize: [30, 40],
+        iconAnchor: [15, 40],
+        popupAnchor: [0, -35]
+    });
+
+    // 주병(양조장) 아이콘 (원형 + 주병 이모지)
+    var breweryIcon = new L.DivIcon({
+        className: 'custom-svg-icon',
+        html: `<div style="width:36px; height:36px; background-color:#F69730; border-radius:50%; border:2px solid white; box-shadow: 2px 4px 6px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center; font-size:20px; color:white;">🍶</div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -18]
+    });
+
+    // 사우나 아이콘 (원형 + 온천 마크)
+    var saunaIcon = new L.DivIcon({
+        className: 'custom-svg-icon',
+        html: `<div style="width:36px; height:36px; background-color:#8A2BE2; border-radius:50%; border:2px solid white; box-shadow: 2px 4px 6px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center; font-size:20px; color:white;">♨️</div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -18]
+    });
+
+    // 딸기 아이콘 (원형 배경 핑크 + 딸기 이모지)
+    var strawberryIcon = new L.DivIcon({
+        className: 'custom-svg-icon',
+        html: `<div style="width:36px; height:36px; background-color:#FF69B4; border-radius:50%; border:2px solid white; box-shadow: 2px 4px 6px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center; font-size:20px; color:white;">🍓</div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -18]
+    });
+
+    var redIcon = createSvgIcon('#CB2B3E', '#fff');    
+    var whiteIcon = createSvgIcon('#FFFFFF', '#333');  
+
+    var places = [
+        // 관공서
+        { name: "양평군청", type: "office", address: "경기도 양평군 양평읍 군청앞길 2", lat: 37.4917, lng: 127.4876, link: "https://map.naver.com/p/search/%EC%96%91%ED%8F%89%EA%B5%B0%EC%B2%AD" },
+
+        // 썰매장
+        { name: "수미마을 얼음썰매장", type: "sledding", address: "경기도 양평군 단월면 곱다니길 55-2", lat: 37.5456, lng: 127.6745, link: "https://map.naver.com/p/search/%EC%96%91%ED%8F%89%20%EC%88%98%EB%AF%B8%EB%A7%88%EC%9D%84%20%EC%8D%B0%EB%A7%A4" },
+        { name: "미리내캠프 눈썰매장", type: "sledding", address: "경기도 양평군 지평면 월산저수지길 21", lat: 37.4920, lng: 127.6405, link: "https://map.naver.com/p/search/%EC%96%91%ED%8F%89%20%EB%AF%B8%EB%A6%AC%EB%82%B4%EC%BA%A0%ED%94%84%20%EB%88%88%EC%8D%B0%EB%A7%A4%EC%9E%A5" },
+        { name: "모꼬지마을 얼음썰매", type: "sledding", address: "경기도 양평군 용문면 조현리", lat: 37.5210, lng: 127.5700, link: "https://map.naver.com/p/search/%EC%96%91%ED%8F%89%20%EB%AA%A8%EA%BC%AC%EC%A7%80%EB%A7%88%EC%9D%84%20%EC%8D%B0%EB%A7%A4" },
+
+        // 사우나/찜질방
+        { name: "양평 힐빙클럽 (사우나/찜질)", type: "sauna", address: "경기도 양평군 옥천면 신촌길 53", lat: 37.5300, lng: 127.4650, link: "https://map.naver.com/p/search/%EC%96%91%ED%8F%89%20%ED%9E%90%EB%B9%99%ED%81%B4%EB%9F%BD" },
+        { name: "용문산 알프스 찜질방", type: "sauna", address: "경기도 양평군 용문면 용문산로 171", lat: 37.5130, lng: 127.6040, link: "https://map.naver.com/p/search/%EC%9A%A9%EB%AC%B8%EC%82%B0%20%EC%95%8C%ED%94%84%EC%8A%A4%20%EC%B0%9C%EC%A7%88%EB%B0%A9" },
+        { name: "강상골 불가마 찜질방", type: "sauna", address: "경기도 양평군 강상면 신화길 118", lat: 37.4750, lng: 127.4900, link: "https://map.naver.com/p/search/%EA%B0%95%EC%83%81%EA%B3%A8%20%EB%B6%88%EA%B0%80%EB%A7%88" },
+        { name: "소노휴 양평 사우나", type: "sauna", address: "경기도 양평군 개군면 신내길7번길 55", lat: 37.4370, lng: 127.5330, link: "https://map.naver.com/p/search/%EC%86%8C%EB%85%B8%ED%9C%B4%20%EC%96%91%ED%8F%89%20%EC%82%AC%EC%9A%B0%EB%82%98" },
+
+        // 양조장
+        { name: "지평양조장 (지평주조)", type: "brewery", address: "경기도 양평군 지평면 지평리 551-2", lat: 37.4772, lng: 127.6366, link: "https://map.naver.com/p/search/%EC%A7%80%ED%8F%89%EC%96%91%EC%A1%B0%EC%9E%A5" },
+        { name: "양평주조", type: "brewery", address: "경기도 양평군 지평면 산허머리길 9", lat: 37.4648, lng: 127.6253, link: "https://map.naver.com/p/search/%EC%96%91%ED%8F%89%EC%A3%BC%EC%A1%B0" },
+        { name: "양평맑은술도가", type: "brewery", address: "경기도 양평군 용문면 용문산로 175", lat: 37.5134, lng: 127.6044, link: "https://map.naver.com/p/search/%EC%96%91%ED%8F%89%EB%A7%91%EC%9D%80%EC%88%A0%EB%8F%84%EA%B0%80" },
+        { name: "세븐브로이 양평공장", type: "brewery", address: "경기도 양평군 청운면 오목골길 26-7", lat: 37.5750, lng: 127.7310, link: "https://map.naver.com/p/search/%EC%84%B8%EB%B8%90%EB%B8%8C%EB%A1%9C%EC%9D%B4%20%EC%96%91%ED%8F%89" },
+        { name: "양수리 양조장", type: "brewery", address: "경기도 양평군 양서면 양수로 173", lat: 37.5450, lng: 127.3220, link: "https://map.naver.com/p/search/%EC%96%91%EC%88%98%EB%A6%AC%20%EC%96%91%EC%A1%B0%EC%9E%A5" },
+        { name: "히든트랙브루잉 신복 양조장", type: "brewery", address: "경기도 양평군 옥천면", lat: 37.5450, lng: 127.4680, link: "https://map.naver.com/p/search/%ED%9E%88%EB%93%A0%ED%8A%B8%EB%9E%99%EB%B8%8C%EB%A3%A8%EC%9E%89%20%EC%8B%A0%EB%B3%B5%EC%96%91%EC%A1%B0%EC%9E%A5" },
+        { name: "양동양조장", type: "brewery", address: "경기도 양평군 양동면", lat: 37.4265, lng: 127.7538, link: "https://map.naver.com/p/search/%EC%96%91%EB%8F%99%EC%96%91%EC%A1%B0%EC%9E%A5" },
+        
+        // 4성급 호텔
+        { name: "블룸비스타 호텔앤컨퍼런스", type: "hotel", address: "경기도 양평군 강하면 강남로 316", lat: 37.5000, lng: 127.4290, link: "https://map.naver.com/p/search/%EB%B8%94%EB%A3%B8%EB%B9%84%EC%8A%A4%ED%84%B0" },
+        { name: "소노벨 양평", type: "hotel", address: "경기도 양평군 개군면 신내길7번길 55", lat: 37.4370, lng: 127.5330, link: "https://map.naver.com/p/search/%EC%86%8C%EB%85%B8%EB%B2%A8%20%EC%96%91%ED%8F%89" },
+        { name: "양평 더스타휴 빌리지", type: "hotel", address: "경기도 양평군 양동면 양동로 756", lat: 37.4530, lng: 127.7800, link: "https://map.naver.com/p/search/%EB%8D%94%EC%8A%A4%ED%83%80%ED%9C%B4%EB%B9%8C%EB%A6%AC%EC%A7%80" },
+        { name: "쉐르빌 온천관광호텔", type: "hotel", address: "경기도 양평군 개군면 신내길7번길 37", lat: 37.4470, lng: 127.5380, link: "https://map.naver.com/p/search/%EC%89%90%EB%A5%B4%EB%B9%8C%EC%98%A8%EC%B2%9C%EA%B4%80%EA%B4%91%ED%98%B8%ED%85%94" },
+        
+        // 딸기체험농장
+        { name: "양평외갓집딸기농장", type: "strawberry", address: "경기도 양평군 양평읍 원덕리 224", lat: 37.4721, lng: 127.5372, link: "https://map.naver.com/p/search/%EC%96%91%ED%8F%89%EC%99%B8%EA%B0%93%EC%A7%91%EB%94%B8%EA%B8%B0%EB%86%8D%EC%9E%A5" },
+        { name: "양평딸기숲", type: "strawberry", address: "경기도 양평군 개군면 개군산로 242-3", lat: 37.4243, lng: 127.5398, link: "https://map.naver.com/p/search/%EC%96%91%ED%8F%89%EB%94%B8%EA%B8%B0%EC%88%B2" },
+        { name: "양수리딸기체험농장", type: "strawberry", address: "경기도 양평군 양서면 두물머리길 8번길 56", lat: 37.5365, lng: 127.3190, link: "https://map.naver.com/p/search/%EC%96%91%EC%88%98%EB%A6%AC%EB%94%B8%EA%B8%B0%EC%B2%B4%ED%97%98%EB%86%8D%EC%9E%A5" },
+        { name: "수미마을 딸기체험", type: "strawberry", address: "경기도 양평군 단월면 곱다니길 55-2", lat: 37.5456, lng: 127.6745, link: "https://map.naver.com/p/search/%EC%96%91%ED%8F%89%20%EC%88%98%EB%AF%B8%EB%A7%88%EC%9D%84%20%EB%94%B8%EA%B8%B0" },
+        { name: "가루매마을 딸기체험", type: "strawberry", address: "경기도 양평군 지평면 가루매길", lat: 37.4810, lng: 127.6400, link: "https://map.naver.com/p/search/%EC%96%91%ED%8F%89%20%EA%B0%80%EB%A3%A8%EB%A7%A4%EB%A7%88%EC%9D%84%20%EB%94%B8%EA%B8%B0" }
+    ];
+
+    var officeList = document.getElementById('office-list');
+    var sleddingList = document.getElementById('sledding-list');
+    var saunaList = document.getElementById('sauna-list');
+    var breweryList = document.getElementById('brewery-list');
+    var hotelList = document.getElementById('hotel-list');
+    var strawberryList = document.getElementById('strawberry-list');
+
+    places.forEach(function(place) {
+        var iconToUse, tagClass, tagText, listTarget;
+        
+        if (place.type === 'office') {
+            iconToUse = buildingIcon; tagClass = 'tag office'; tagText = '관공서'; listTarget = officeList;
+        } else if (place.type === 'sledding') {
+            iconToUse = whiteIcon; tagClass = 'tag sledding'; tagText = '썰매체험'; listTarget = sleddingList;
+        } else if (place.type === 'sauna') {
+            iconToUse = saunaIcon; tagClass = 'tag sauna'; tagText = '사우나'; listTarget = saunaList;
+        } else if (place.type === 'brewery') {
+            iconToUse = breweryIcon; tagClass = 'tag brewery'; tagText = '양조장'; listTarget = breweryList;
+        } else if (place.type === 'hotel') {
+            iconToUse = redIcon; tagClass = 'tag hotel'; tagText = '4성급 호텔'; listTarget = hotelList;
+        } else if (place.type === 'strawberry') {
+            iconToUse = strawberryIcon; tagClass = 'tag strawberry'; tagText = '딸기체험'; listTarget = strawberryList;
+        }
+        
+        var marker = L.marker([place.lat, place.lng], { icon: iconToUse }).addTo(map);
+        
+        var popupHtml = `
+            <div class="popup-content">
+                <div class="${tagClass}">${tagText}</div>
+                <h3>${place.name}</h3>
+                <p>${place.address}</p>
+                <a href="${place.link}" target="_blank">네이버 지도로 보기</a>
+            </div>
+        `;
+        marker.bindPopup(popupHtml);
+
+        var listItem = document.createElement('li');
+        listItem.innerHTML = `<strong>${place.name}</strong><span>${place.address}</span>`;
+        
+        listItem.onclick = function() {
+            map.setView([place.lat, place.lng], 14); 
+            marker.openPopup();
+        };
+
+        listTarget.appendChild(listItem);
+    });
+</script>
+
+</body>
+</html>
